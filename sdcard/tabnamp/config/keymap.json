@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "bindings": {
+    "Space": "play_pause",
+    "Z": "previous",
+    "X": "play",
+    "C": "pause",
+    "V": "stop",
+    "B": "next",
+    "M": "mute",
+    "S": "shuffle",
+    "R": "repeat",
+    "E": "equalizer",
+    "P": "playlist",
+    "J": "search",
+    "Ctrl+O": "open",
+    "Ctrl+L": "url",
+    "Ctrl+S": "save",
+    "Left": "seek_back",
+    "Right": "seek_forward",
+    "Up": "volume_up",
+    "Down": "volume_down",
+    "Delete": "remove",
+    "Enter": "confirm",
+    "Tab": "focus_next",
+    "Shift+Tab": "focus_previous",
+    "Esc": "back"
+  }
+}

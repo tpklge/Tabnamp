@@ -1,0 +1,13 @@
+{
+  "project": "tabnamp",
+  "chip": "esp32p4",
+  "type": "application",
+  "partition_table_required": false,
+  "fixed_flash_offset": null,
+  "bytes": 3026096,
+  "sha256": "ee9de827b94b16c578d8144622d63cc4e4351092d30dcb6f2bb50cc8c80cbcf2",
+  "install": "Launcher do Paludo: install application in a slot large enough for the image",
+  "release": "v0.1.0",
+  "date": "2026-11-19",
+  "source": "https://github.com/tpklge/Tabnamp"
+}

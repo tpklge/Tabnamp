@@ -1,0 +1,25 @@
+build/
+managed_components/
+sdkconfig
+sdkconfig.old
+__pycache__/
+.host-build/
+.emulator-build/
+artifacts/*
+!artifacts/tabnamp-ota.bin
+!artifacts/tabnamp-microsd.zip
+!artifacts/tabnamp-completo.zip
+!artifacts/tabnamp-testes-mp3.zip
+!artifacts/manifest.json
+!artifacts/validation.json
+!artifacts/SHA256SUMS.txt
+.tools/
+tools/assets/node_modules/
+.legacy-tests/
+.DS_Store
+*.code-workspace
+PROMPT_CODEX_TABNAMP.md
+mp3/
+references/*.png
+references/*.jpg
+docs/screenshots/* [0-9]*.png

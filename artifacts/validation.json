@@ -1,0 +1,60 @@
+{
+  "scope": "Regressao de audio e interface; nao e a suite fisica completa de resistencia e perifericos",
+  "status": "passed",
+  "firmware_sha256": "ee9de827b94b16c578d8144622d63cc4e4351092d30dcb6f2bb50cc8c80cbcf2",
+  "bytes": 3026096,
+  "application_only": true,
+  "partition_table_required": false,
+  "installation": {
+    "status": "passed",
+    "method": "application-only serial write in verified existing slot",
+    "application_readback_sha256": "ee9de827b94b16c578d8144622d63cc4e4351092d30dcb6f2bb50cc8c80cbcf2",
+    "launcher_unchanged": true,
+    "meshtastic_unchanged": true,
+    "partition_table_changed": false
+  },
+  "host": {
+    "core_tests": "passed",
+    "tool_tests": "passed",
+    "emulator": {
+      "backend": "LVGL 9.3 + SDL software display + FFmpeg host decoder",
+      "assertions": 448,
+      "status": "passed",
+      "elapsed_seconds": 5.06609,
+      "software_presented_fps": 19.752,
+      "hardware_validated": false
+    },
+    "soak": {
+      "audio_seconds": 60,
+      "radio_audio_seconds": 60,
+      "ring_underruns": 0,
+      "gapless_transitions": 7,
+      "accelerated": true,
+      "hardware_validated": false
+    }
+  },
+  "hardware": {
+    "status": "passed",
+    "speaker_codec_route": "passed",
+    "headphone_codec_route": "passed",
+    "dac_left_register": 0,
+    "dac_right_register": 0,
+    "large_mp3_play_and_pause": "passed",
+    "output_write_errors": 0,
+    "ring_underruns": 0,
+    "ui_window": {
+      "seconds": 30.027,
+      "callbacks_per_second": 49.72191694141939,
+      "flush_submissions_per_second": 17.384354081326805,
+      "refresh_us_max": 4290,
+      "callback_gap_ms_max": 42
+    },
+    "panel_fps_measured": false,
+    "quantitative_touch_latency_measured": false,
+    "adequate_volume_confirmed_by_user": true,
+    "improved_touch_response_confirmed_by_user": true
+  },
+  "full_endurance_repeated_for_this_binary": false,
+  "usb_physical_retest_this_round": false,
+  "limitations": "docs/STATUS.md"
+}

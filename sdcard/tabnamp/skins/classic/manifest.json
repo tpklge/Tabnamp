@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "name": "Tabnamp Classic",
+  "implementation": "LVGL native widgets, external binary fonts and palette",
+  "background": "#303044",
+  "foreground": "#66ff48",
+  "fonts": {
+    "text": "fonts/text20.bin",
+    "time": "fonts/text32.bin"
+  }
+}

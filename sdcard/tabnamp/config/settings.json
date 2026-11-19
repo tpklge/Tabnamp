@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "volume": 25,
+  "brightness": 70,
+  "repeat": 0,
+  "orientation_mode": 1,
+  "balance": 0,
+  "output": 0,
+  "keyboard_layout": 0,
+  "remaining": false,
+  "visualize": true,
+  "mute": false,
+  "shuffle": false,
+  "landscape": true,
+  "eq_enabled": true,
+  "preamp_db": 0,
+  "bands_db": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ]
+}

@@ -1,0 +1,11 @@
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+*.bin binary
+*.zip binary
+*.png binary
+*.jpg binary
+*.gz binary
+# Preserve upstream license text and unified-diff context verbatim.
+sdcard/tabnamp/skins/classic/fonts/OFL.txt -whitespace
+third_party/ffmpeg/port.patch -whitespace
