@@ -8,16 +8,16 @@ O artefato de entrega é **`artifacts/tabnamp-ota.bin`**, uma imagem de aplicaç
 
 | Arquivo | Uso |
 |---|---|
-| [tabnamp-ota.bin](https://github.com/tpklge/Tabnamp/releases/latest/download/tabnamp-ota.bin) | Aplicação ESP32-P4 para o launcher/OTA; 3.026.096 bytes |
+| [tabnamp-ota.bin](https://github.com/tpklge/Tabnamp/releases/latest/download/tabnamp-ota.bin) | Aplicação ESP32-P4 para o launcher/OTA; 3.052.208 bytes |
 | [tabnamp-microsd.zip](https://github.com/tpklge/Tabnamp/releases/latest/download/tabnamp-microsd.zip) | Extraia na raiz do microSD: cria `tabnamp/` com configurações, fontes e presets |
 | [tabnamp-completo.zip](https://github.com/tpklge/Tabnamp/releases/latest/download/tabnamp-completo.zip) | Firmware, padrões do microSD, instalador de arquivos e licenças |
 | [tabnamp-testes-mp3.zip](https://github.com/tpklge/Tabnamp/releases/latest/download/tabnamp-testes-mp3.zip) | Apitos, batidas e teste estéreo sintéticos; copie para `tabnamp/music/testes/` |
 | [tabnamp-ffmpeg-source.tar.gz](https://github.com/tpklge/Tabnamp/releases/latest/download/tabnamp-ffmpeg-source.tar.gz) | Fontes modificadas e configuração do FFmpeg usado neste firmware |
 | [SHA256SUMS.txt](https://github.com/tpklge/Tabnamp/releases/latest/download/SHA256SUMS.txt) | Verificação dos arquivos publicados |
 
-Os quatro primeiros arquivos também estão em [`artifacts/`](artifacts/), na branch `main`. Para instalar, prepare o microSD e envie o `.bin` como aplicativo pelo launcher, em um slot com pelo menos 3.026.096 bytes. A atualização mantém a tabela de partições e o bootloader existentes.
+Os quatro primeiros arquivos também estão em [`artifacts/`](artifacts/), na branch `main`. Para instalar, prepare o microSD e envie o `.bin` como aplicativo pelo launcher, em um slot com pelo menos 3.052.208 bytes. A atualização mantém a tabela de partições e o bootloader existentes.
 
-Versão testada no Tab5: ganho do codec/EQ corrigido, botões com cantos discretos e atualização do espectro restrita à sua área. A janela de reprodução do MP3 maior registrou intervalo máximo de 42 ms entre callbacks da interface e zero erros de saída. O usuário confirmou volume adequado e resposta ao toque melhor. Evidências resumidas em [`artifacts/validation.json`](artifacts/validation.json) e limites em [`docs/STATUS.md`](docs/STATUS.md).
+Versão **v0.1.1** testada no Tab5: teclado físico oficial **A164 por I²C** reconhecido e digitando, confirmado pelo usuário e pela serial, sem erros I²C na captura. A revisão também corrige foco/Enter nos campos e reduz o redesenho do teclado touch em 82,2% no simulador; a latência física do touch não foi medida. Os ensaios anteriores de áudio/volume continuam identificados pelos seus próprios hashes. Evidências em [`artifacts/validation.json`](artifacts/validation.json) e limites em [`docs/STATUS.md`](docs/STATUS.md).
 
 ![Interface do Tabnamp renderizada pelo simulador LVGL](docs/screenshots/landscape.png)
 
@@ -32,7 +32,7 @@ Versão testada no Tab5: ganho do codec/EQ corrigido, botões com cantos discret
 - UI clássica com botões de cantos levemente arredondados, atualizações só quando há mudanças, três painéis, reflow real em 1280×720 e 720×1280, orientação automática pela IMU ou manual preservando reprodução, fonte externa com acentos e paleta do manifesto no SD.
 - Navegador de arquivos, adição de pastas recursiva, URL, abertura/salvamento M3U/M3U8/PLS, remoção, reordenação, seleção múltipla, arraste, ordenação por título/artista/álbum e pesquisa. Até 10.000 caminhos em RAM, com somente 9 linhas LVGL, reduzidas a 6 em retrato. Indexação incremental com cache limitado de tags em disco; coleção de 5.000 entradas exercitada no simulador.
 - Persistência com debounce, temporário + flush/fsync + backup/rename, validação de esquema e recuperação de configurações corrompidas. Sessão/fila gravadas juntas num checkpoint schema 2 com backup a cada 15 s; retorno pausado e volume limitado a 40% no boot. Nunca grava playlists sobre extensões de arquivos musicais.
-- USB HID boot keyboard com reconexão, eventos de pressão/soltura, repetição controlada, atalhos no `keymap.json`, campos de texto protegidos contra atalhos e teclado virtual. Inclui descritores HID Consumer/multimídia e layouts US/ABNT2 com acentos.
+- Teclado físico oficial **Tab5 Keyboard A164 por I²C** (Ext.Port1, endereço `0x6D`, SDA 0/SCL 1), com leitura fora da tarefa LVGL, configuração do modo HID, soltura e repetição controlada. USB HID adicional com reconexão, atalhos no `keymap.json`, campos de texto protegidos contra atalhos e teclado virtual. Inclui descritores HID Consumer/multimídia e layouts US/ABNT2 com acentos. `player keyboard` consulta presença, modo e contadores do A164 pela serial.
 - Wi-Fi pelo C6/ESP-Hosted SDIO slot 1, busca de redes, credenciais no SD, restauração de rede, SNTP e HTTPS com validação TLS. Não atualiza firmware do C6. microSD continua no slot 0 do BSP.
 - Backlight desligado após **300 s sem entrada**, áudio independente, animações, FFT e invalidação visual suspensas. Primeiro contato/tecla de despertar, repetições e soltura são consumidos. Alvos físicos de latência/fps/continuidade não foram medidos.
 

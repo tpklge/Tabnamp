@@ -151,24 +151,67 @@ void Ui::menu(){
     button(overlay_,"Fechar",0,0,420,[this]{close_dialog();});
 }
 void Ui::configure_keyboard(){
+    // A key press changes the buttonmatrix state and redraws its items. Avoid
+    // the default theme's per-key shadows and translucent color filters on P4.
+    lv_obj_remove_style_all(keyboard_);
+    lv_obj_set_style_bg_color(keyboard_,lv_color_hex(0x242439),0);
+    lv_obj_set_style_bg_opa(keyboard_,LV_OPA_COVER,0);
+    lv_obj_set_style_pad_all(keyboard_,6,0);
+    lv_obj_set_style_pad_row(keyboard_,6,0);lv_obj_set_style_pad_column(keyboard_,6,0);
+    lv_obj_set_style_bg_color(keyboard_,lv_color_hex(0x8997a9),LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(keyboard_,LV_OPA_COVER,LV_PART_ITEMS);
+    lv_obj_set_style_text_color(keyboard_,lv_color_hex(0x101522),LV_PART_ITEMS);
     lv_obj_set_style_text_font(keyboard_,font_?font_:&lv_font_montserrat_20,LV_PART_ITEMS);
     lv_obj_set_style_radius(keyboard_,6,LV_PART_ITEMS);
+    lv_obj_remove_flag(keyboard_,LV_OBJ_FLAG_SCROLLABLE);
+    lv_keyboard_set_popovers(keyboard_,false);
+    // State-dependent styles invalidate the entire buttonmatrix on every
+    // press/release. Color the selected key at draw time instead, retaining
+    // LVGL's small per-button damage regions and immediate press feedback.
+    lv_obj_add_flag(keyboard_,LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS);
+    lv_obj_add_event_cb(keyboard_,[](lv_event_t* e){
+        auto* keyboard=static_cast<lv_obj_t*>(lv_event_get_target(e));
+        auto* fill=lv_draw_task_get_fill_dsc(lv_event_get_draw_task(e));
+        if(fill&&fill->base.part==LV_PART_ITEMS&&fill->base.id1==lv_keyboard_get_selected_button(keyboard)&&lv_obj_has_state(keyboard,LV_STATE_PRESSED))fill->color=lv_color_hex(0xb6c1cc);
+    },LV_EVENT_DRAW_TASK_ADDED,nullptr);
     if(engine_.snapshot().settings.keyboard_layout!=1)return;
-    static const char* lower[]={"1","2","3","4","5","6","7","8","9","0","\n","q","w","e","r","t","y","u","i","o","p","\n","a","s","d","f","g","h","j","k","l","ç","\n","z","x","c","v","b","n","m",".","/","-","\n","á","é","í","ó","ú","ã","õ","â","ê","ô","\n","ABC",LV_SYMBOL_BACKSPACE," ",LV_SYMBOL_NEW_LINE,LV_SYMBOL_OK,""};
-    static const char* upper[]={"1","2","3","4","5","6","7","8","9","0","\n","Q","W","E","R","T","Y","U","I","O","P","\n","A","S","D","F","G","H","J","K","L","Ç","\n","Z","X","C","V","B","N","M",".","/","-","\n","Á","É","Í","Ó","Ú","Ã","Õ","Â","Ê","Ô","\n","abc",LV_SYMBOL_BACKSPACE," ",LV_SYMBOL_NEW_LINE,LV_SYMBOL_OK,""};
-    static std::array<lv_buttonmatrix_ctrl_t,55> controls=[](){std::array<lv_buttonmatrix_ctrl_t,55> out{};out.fill(lv_buttonmatrix_ctrl_t(1));out[52]=lv_buttonmatrix_ctrl_t(3);return out;}();
-    lv_keyboard_set_map(keyboard_,LV_KEYBOARD_MODE_TEXT_LOWER,lower,controls.data());lv_keyboard_set_map(keyboard_,LV_KEYBOARD_MODE_TEXT_UPPER,upper,controls.data());lv_obj_set_height(keyboard_,landscape_?280:420);
+    static const char* lower[]={"1","2","3","4","5","6","7","8","9","0","\n","q","w","e","r","t","y","u","i","o","p","\n","a","s","d","f","g","h","j","k","l","ç","\n","z","x","c","v","b","n","m",".","/","-","\n","á","é","í","ó","ú","ã","õ","â","ê","ô","\n","1#","ABC",LV_SYMBOL_BACKSPACE," ",LV_SYMBOL_NEW_LINE,LV_SYMBOL_OK,""};
+    static const char* upper[]={"1","2","3","4","5","6","7","8","9","0","\n","Q","W","E","R","T","Y","U","I","O","P","\n","A","S","D","F","G","H","J","K","L","Ç","\n","Z","X","C","V","B","N","M",".","/","-","\n","Á","É","Í","Ó","Ú","Ã","Õ","Â","Ê","Ô","\n","1#","abc",LV_SYMBOL_BACKSPACE," ",LV_SYMBOL_NEW_LINE,LV_SYMBOL_OK,""};
+    static std::array<lv_buttonmatrix_ctrl_t,56> controls=[](){
+        std::array<lv_buttonmatrix_ctrl_t,56> out{};out.fill(lv_buttonmatrix_ctrl_t(1));out[53]=lv_buttonmatrix_ctrl_t(3);
+        for(auto index:{50,51,54,55})out[index]=lv_buttonmatrix_ctrl_t(1|LV_BUTTONMATRIX_CTRL_NO_REPEAT);
+        return out;
+    }();
+    lv_keyboard_set_map(keyboard_,LV_KEYBOARD_MODE_TEXT_LOWER,lower,controls.data());lv_keyboard_set_map(keyboard_,LV_KEYBOARD_MODE_TEXT_UPPER,upper,controls.data());
 }
+void Ui::configure_entry(lv_obj_t* field){
+    // Fixed geometry during insertion: no focus scrolling or animated scrolling
+    // across the modal while the keyboard is being pressed.
+    lv_obj_remove_flag(field,LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+    lv_obj_set_style_radius(field,0,0);lv_obj_set_style_shadow_width(field,0,0);
+    lv_obj_set_style_anim_duration(field,0,0);
+    lv_obj_add_event_cb(field,[](lv_event_t* e){
+        auto* u=static_cast<Ui*>(lv_event_get_user_data(e));
+        u->entry_=static_cast<lv_obj_t*>(lv_event_get_target(e));u->dead_key_=0;
+        if(u->keyboard_)lv_keyboard_set_textarea(u->keyboard_,u->entry_);
+    },LV_EVENT_FOCUSED,this);
+}
+void Ui::submit_entry(){auto text=std::string(lv_textarea_get_text(entry_));post({pending_,0,0,text});close_dialog();}
 void Ui::credentials(const std::string& status,std::function<void(std::string,std::string)> connect,std::function<void()> scan){
     close_dialog();overlay_=lv_obj_create(root_);lv_obj_set_pos(overlay_,16,16);lv_obj_set_size(overlay_,landscape_?1248:688,landscape_?688:1248);lv_obj_set_style_bg_color(overlay_,lv_color_hex(0x242439),0);
     label(overlay_,status.c_str(),4,4,landscape_?1150:620);
     entry_=lv_textarea_create(overlay_);lv_obj_set_pos(entry_,4,180);lv_obj_set_size(entry_,landscape_?1100:610,52);lv_textarea_set_one_line(entry_,true);lv_textarea_set_placeholder_text(entry_,"SSID");lv_textarea_set_max_length(entry_,32);
     auto* pass=lv_textarea_create(overlay_);lv_obj_set_pos(pass,4,244);lv_obj_set_size(pass,landscape_?1100:610,52);lv_textarea_set_one_line(pass,true);lv_textarea_set_password_mode(pass,true);lv_textarea_set_placeholder_text(pass,"Senha (armazenada no SD removivel)");lv_textarea_set_max_length(pass,64);
-    keyboard_=lv_keyboard_create(overlay_);configure_keyboard();lv_obj_set_width(keyboard_,lv_pct(100));lv_obj_set_height(keyboard_,landscape_?220:400);lv_obj_align(keyboard_,LV_ALIGN_BOTTOM_MID,0,0);lv_keyboard_set_textarea(keyboard_,entry_);configure_keyboard();
-    for(auto* field:{entry_,pass})lv_obj_add_event_cb(field,[](lv_event_t* e){auto* u=static_cast<Ui*>(lv_event_get_user_data(e));u->entry_=static_cast<lv_obj_t*>(lv_event_get_target(e));lv_keyboard_set_textarea(u->keyboard_,u->entry_);},LV_EVENT_FOCUSED,this);
+    keyboard_=lv_keyboard_create(overlay_);configure_keyboard();lv_obj_set_width(keyboard_,lv_pct(100));lv_obj_set_height(keyboard_,engine_.snapshot().settings.keyboard_layout==1?(landscape_?280:420):(landscape_?220:400));lv_obj_align(keyboard_,LV_ALIGN_BOTTOM_MID,0,0);lv_keyboard_set_textarea(keyboard_,entry_);
+    for(auto* field:{entry_,pass})configure_entry(field);
+    lv_obj_remove_flag(overlay_,LV_OBJ_FLAG_SCROLLABLE);
+    lv_group_focus_obj(entry_);
     auto* ssid=entry_;
-    button(overlay_,"Conectar",4,316,140,[this,ssid,pass,connect]{auto s=std::string(lv_textarea_get_text(ssid)),p=std::string(lv_textarea_get_text(pass));connect(s,p);close_dialog();});
-    button(overlay_,"Buscar redes",156,316,180,[this,scan]{scan();close_dialog();});button(overlay_,"Fechar",348,316,130,[this]{close_dialog();});
+    auto* connect_button=button(overlay_,"Conectar",4,304,140,[this,ssid,pass,connect]{auto s=std::string(lv_textarea_get_text(ssid)),p=std::string(lv_textarea_get_text(pass));connect(s,p);close_dialog();});
+    entry_submit_=connect_button;
+    button(overlay_,"Buscar redes",156,304,180,[this,scan]{scan();close_dialog();});button(overlay_,"Fechar",348,304,130,[this]{close_dialog();});
+    lv_obj_add_event_cb(keyboard_,[](lv_event_t* e){lv_obj_send_event(static_cast<lv_obj_t*>(lv_event_get_user_data(e)),LV_EVENT_CLICKED,nullptr);},LV_EVENT_READY,connect_button);
+    lv_obj_add_event_cb(keyboard_,[](lv_event_t* e){static_cast<Ui*>(lv_event_get_user_data(e))->close_dialog();},LV_EVENT_CANCEL,this);
 }
 void Ui::request_orientation(bool value){pending_orientation_=value?1:0;}
 void Ui::select_row(int row){
@@ -192,13 +235,18 @@ void Ui::preferences(){
     auto* output=lv_dropdown_create(overlay_);lv_dropdown_set_options(output,"Alto-falante (downmix mono)\nFones (estereo)");lv_dropdown_set_selected(output,s.settings.output);lv_obj_set_width(output,lv_pct(100));lv_obj_add_event_cb(output,[](lv_event_t* e){static_cast<Ui*>(lv_event_get_user_data(e))->post({Action::Output,int(lv_dropdown_get_selected(static_cast<lv_obj_t*>(lv_event_get_target(e))))});},LV_EVENT_VALUE_CHANGED,this);
     button(overlay_,s.settings.visualize?"Desligar visualizador":"Ligar visualizador",0,0,360,[this]{post({Action::Visualize});close_dialog();});button(overlay_,"Tentar montar SD",0,0,360,[this]{post({Action::RetryStorage});close_dialog();});button(overlay_,"Fechar",0,0,180,[this]{close_dialog();});
 }
-void Ui::close_dialog(){if(overlay_)lv_obj_delete(overlay_);overlay_=entry_=keyboard_=nullptr;browser_mode_=false;dead_key_=0;}
+void Ui::close_dialog(){if(overlay_)lv_obj_delete(overlay_);overlay_=entry_=keyboard_=entry_submit_=nullptr;browser_mode_=false;dead_key_=0;}
 void Ui::prompt(const char* title,Action action,const std::string& value){
     close_dialog();pending_=action;overlay_=lv_obj_create(root_);lv_obj_set_style_bg_color(overlay_,lv_color_hex(0x242439),0);lv_obj_set_style_radius(overlay_,0,0);lv_obj_set_pos(overlay_,16,16);lv_obj_set_size(overlay_,lv_display_get_horizontal_resolution(display_)-32,lv_display_get_vertical_resolution(display_)-32);
     label(overlay_,title,4,4,landscape_?1100:620);
     entry_=lv_textarea_create(overlay_);lv_obj_set_pos(entry_,4,66);lv_obj_set_width(entry_,landscape_?1180:620);lv_obj_set_height(entry_,120);lv_textarea_set_max_length(entry_,2048);lv_textarea_set_text(entry_,value.c_str());
-    keyboard_=lv_keyboard_create(overlay_);configure_keyboard();lv_obj_set_width(keyboard_,lv_pct(100));lv_obj_set_height(keyboard_,landscape_?240:380);lv_obj_align(keyboard_,LV_ALIGN_BOTTOM_MID,0,0);lv_keyboard_set_textarea(keyboard_,entry_);configure_keyboard();
-    button(overlay_,"Confirmar",4,200,160,[this]{auto text=std::string(lv_textarea_get_text(entry_));post({pending_,0,0,text});close_dialog();});button(overlay_,"Cancelar",180,200,140,[this]{close_dialog();});
+    configure_entry(entry_);lv_obj_remove_flag(overlay_,LV_OBJ_FLAG_SCROLLABLE);
+    keyboard_=lv_keyboard_create(overlay_);configure_keyboard();lv_obj_set_width(keyboard_,lv_pct(100));lv_obj_set_height(keyboard_,engine_.snapshot().settings.keyboard_layout==1?(landscape_?280:420):(landscape_?240:380));lv_obj_align(keyboard_,LV_ALIGN_BOTTOM_MID,0,0);lv_keyboard_set_textarea(keyboard_,entry_);
+    entry_submit_=button(overlay_,"Confirmar",4,200,160,[this]{submit_entry();});
+    button(overlay_,"Cancelar",180,200,140,[this]{close_dialog();});
+    lv_obj_add_event_cb(keyboard_,[](lv_event_t* e){static_cast<Ui*>(lv_event_get_user_data(e))->submit_entry();},LV_EVENT_READY,this);
+    lv_obj_add_event_cb(keyboard_,[](lv_event_t* e){static_cast<Ui*>(lv_event_get_user_data(e))->close_dialog();},LV_EVENT_CANCEL,this);
+    lv_group_focus_obj(entry_);
 }
 void Ui::confirm(const char* text,std::function<void()> fn){
     close_dialog();overlay_=lv_obj_create(root_);lv_obj_set_size(overlay_,landscape_?900:650,260);lv_obj_center(overlay_);lv_obj_set_style_bg_color(overlay_,lv_color_hex(0x242439),0);label(overlay_,text,4,4,landscape_?840:590);
@@ -222,11 +270,36 @@ bool Ui::key(int key,bool ctrl,bool shift,bool down,uint8_t token,uint64_t now){
         else if(key!=MediaUnknown){Action actions[]={Action::PlayPause,Action::Play,Action::Pause,Action::Stop,Action::Next,Action::Previous,Action::Mute};post({actions[key-MediaPlayPause]});}
         return false;
     }
-    if(overlay_){if(key=='\t'){if(shift)lv_group_focus_prev(focus_);else lv_group_focus_next(focus_);return false;}if(key==27){close_dialog();return false;}
+    if(overlay_){if(key=='\t'){
+            // Keep keyboard navigation within the open modal, skipping its
+            // buttonmatrix (text input belongs to the active textarea).
+            for(uint32_t i=0;i<lv_group_get_obj_count(focus_);i++){
+                if(shift)lv_group_focus_prev(focus_);else lv_group_focus_next(focus_);
+                auto* focused=lv_group_get_focused(focus_);auto* parent=focused;
+                while(parent&&parent!=overlay_)parent=lv_obj_get_parent(parent);
+                if(parent&&focused!=keyboard_)break;
+            }
+            return false;
+        }if(key==27){close_dialog();return false;}
+        if(key=='\r'||key=='\n'){
+            auto* focused=lv_group_get_focused(focus_);auto* parent=focused;
+            while(parent&&parent!=overlay_)parent=lv_obj_get_parent(parent);
+            if(parent&&lv_obj_check_type(focused,&lv_button_class))lv_obj_send_event(focused,LV_EVENT_CLICKED,nullptr);
+            else if(entry_submit_)lv_obj_send_event(entry_submit_,LV_EVENT_CLICKED,nullptr);
+            return false;
+        }
         if(entry_){
             if(key>=0x110001&&key<=0x110005){dead_key_=key;return false;}
             if(dead_key_&&key>=32&&key<=0xff){const char* plain="aeiouAEIOU";const char* match=strchr(plain,char(key));static const uint32_t accents[5][10]={{0xe1,0xe9,0xed,0xf3,0xfa,0xc1,0xc9,0xcd,0xd3,0xda},{0xe0,0xe8,0xec,0xf2,0xf9,0xc0,0xc8,0xcc,0xd2,0xd9},{0xe2,0xea,0xee,0xf4,0xfb,0xc2,0xca,0xce,0xd4,0xdb},{0xe3,0,0,0xf5,0,0xc3,0,0,0xd5,0},{0xe4,0xeb,0xef,0xf6,0xfc,0xc4,0xcb,0xcf,0xd6,0xdc}};if(match&&accents[dead_key_-0x110001][match-plain])key=accents[dead_key_-0x110001][match-plain];else if(dead_key_==0x110004&&(key=='n'||key=='N'))key=key=='n'?0xf1:0xd1;else if(key==' ')key=dead_key_==0x110001?0xb4:dead_key_==0x110002?'`':dead_key_==0x110003?'^':dead_key_==0x110004?'~':0xa8;else insert_character(entry_,dead_key_==0x110001?0xb4:dead_key_==0x110002?'`':dead_key_==0x110003?'^':dead_key_==0x110004?'~':0xa8);dead_key_=0;}
-            if(key==8||key==127)lv_textarea_delete_char(entry_);else if(key>=32&&key<=0x10ffff&&!ctrl)insert_character(entry_,key);}
+            if(key==8)lv_textarea_delete_char(entry_);
+            else if(key==127)lv_textarea_delete_char_forward(entry_);
+            else if(key==LV_KEY_LEFT)lv_textarea_cursor_left(entry_);
+            else if(key==LV_KEY_RIGHT)lv_textarea_cursor_right(entry_);
+            else if(key==LV_KEY_UP)lv_textarea_cursor_up(entry_);
+            else if(key==LV_KEY_DOWN)lv_textarea_cursor_down(entry_);
+            else if(key==LV_KEY_HOME)lv_textarea_set_cursor_pos(entry_,0);
+            else if(key==LV_KEY_END)lv_textarea_set_cursor_pos(entry_,LV_TEXTAREA_CURSOR_LAST);
+            else if(key>=32&&key<=0x10ffff&&!ctrl)insert_character(entry_,key);}
         return false;}
     std::string name;
     if(key==' ')name="Space";else if(key==LV_KEY_LEFT)name="Left";else if(key==LV_KEY_RIGHT)name="Right";else if(key==LV_KEY_UP)name="Up";else if(key==LV_KEY_DOWN)name="Down";else if(key==127)name="Delete";else if(key=='\r'||key=='\n')name="Enter";else if(key=='\t')name="Tab";else if(key==27)name="Esc";else if(key>='a'&&key<='z')name=char(key-'a'+'A');else if(key>='A'&&key<='Z')name=char(key);

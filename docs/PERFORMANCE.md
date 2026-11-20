@@ -2,7 +2,31 @@
 
 Ambiente: macOS arm64, ESP-IDF 5.4.4, ESP32-P4 revisão 1.3 com 32 MiB de PSRAM, LVGL 9.3. O aparelho físico executa o firmware instalado pelo Launcher do Paludo; o simulador usa SDL e FFmpeg host. O C6 existente, versão 2.13.1, não foi regravado.
 
-## Regressão atual de volume/interface
+## Teclado físico A164 por I²C
+
+O teclado mecânico da base é o [A164](https://docs.m5stack.com/en/tab5/Tab5_Keyboard), via Ext.Port1/I²C `0x6D`, SDA GPIO0/SCL GPIO1. O firmware anterior só tinha entrada USB HID. `platform/tab5/a164.cpp` agora configura modo HID, consulta/drena a FIFO em tarefa própria a cada 10 ms e encaminha os pacotes de dois bytes ao controlador de entrada existente. O protocolo do firmware do acessório produz uso HID no pressionamento e código zero na soltura; Aa/Sym são tratados pelo acessório. As operações I²C têm timeout limitado e ficam fora do LVGL; erro/retirada solta o estado anterior e dispara novas tentativas. Nenhum firmware/endereço do acessório foi regravado. Enter confirma os diálogos de texto.
+
+Build, 3/3 CTest com ASan/UBSan e 475 checks de interface passaram. O teste do adaptador real cobre pacotes A164, soltura, Aa/Shift, Ctrl, repetição e FIFO vazia. Imagem `0540c38555b2820ab9cbd2946a1145c36c1ac88d79044617100ee6c8a981d5bf`, 3.052.208 bytes, instalada e lida de volta em `app1`, com regiões protegidas e cauda conferidas. A serial detectou A164 firmware 1/modo 1, 13 eventos/7 pressões e 14 entregas à UI, sem erros I²C na janela; o usuário confirmou funcionamento. `a164-install/validation.json` e `a164-key-monitor.json` preservam a evidência. `player keyboard` consulta o teclado correto; os contadores USB não representam o A164. A latência física do touch segue sem medição.
+
+## Revisão adicional do teclado USB pela serial
+
+A imagem anterior inicializava HID dentro do callback chamado por `usb_host_client_handle_events()`. As requisições síncronas de descritor/SET_PROTOCOL aguardam um semáforo que esse mesmo processamento de eventos precisa liberar: o caminho bloqueava até o timeout. Conexão/configuração e encerramento agora passam por uma fila para a tarefa `hid_devices`; callbacks de reports continuam curtos. A limpeza de interfaces rejeitadas/com erro também passou a respeitar o callback DISCONNECTED, evitando apagar o contexto duas vezes. SET_IDLE é tentado em teclados boot e há suporte a hubs no build.
+
+`tests/hid_adapter_tests.cpp` compila o adaptador real com a fronteira USB/FreeRTOS simulada. Exercita bloqueio no callback, digitação, desconexão com tecla pressionada, falha de protocolo, interface não suportada e reconexão, com ASan/UBSan. Uma mutação que volta a executar a configuração no callback falha; a implementação com worker passa (`artifacts/hid-deadlock-regression.json`). Os três CTest passaram, e o firmware compilou (`hid-core-tests.log`, `hid-build.log`). Isso não comprova a enumeração do teclado físico.
+
+No boot físico anterior, a serial registrou `No HID device at USB port 1` e montagem de dispositivo FAT, sem conexão HID (`hid-original-boot.log`). Isso não diagnostica o A164, cuja comunicação é I²C. A imagem de diagnóstico foi instalada somente em `app1`, após backup integral. Leitura posterior conferiu a aplicação e preservação de bootloader, tabela, launcher, Meshtastic e cauda do slot (`hid-install-validation.json`). `player hid` consulta USB HID; `player usb` lista VID/PID e classes das interfaces enumeradas sem reivindicar seus endpoints. Não registra texto digitado. O funcionamento de um teclado USB real continua sem validação física nesta rodada.
+
+## Candidata de correção da digitação
+
+O relato de aproximadamente 20 s por tecla no teclado touch motivou uma revisão separada. `artifacts/tabnamp-keyboard-fix.bin` foi copiada ao microSD e a investigação HID posterior confirmou esta imagem instalada em `app1`; ela foi substituída pela revisão HID. Não houve medição da latência física do touch. As evidências físicas abaixo continuam pertencendo aos hashes indicados em cada rodada.
+
+O touch agora usa explicitamente `LV_INDEV_MODE_TIMER` com período de 10 ms: o BSP selecionava modo por eventos e alterar somente o período não assegurava polling contínuo. O teclado virtual usa cores opacas sem sombras/filtros; o destaque é aplicado no desenho da tecla, evitando que estilos por estado invalidem a matriz inteira a cada pressão/soltura. Em 12 toques iguais no display de software, a área transferida caiu de 4.682.766 para 833.204 pixels (82,2%). Esse número mede trabalho de redesenho, não latência física dedo/painel. O atraso de 20 s não foi reproduzido no simulador.
+
+Os testes exercitam toques sucessivos em paisagem/retrato, isolamento dos atalhos, cursor/Backspace/Delete UTF-8, foco por toque/Tab entre SSID e senha, caracteres especiais no layout português e confirmação pelo OK virtual. Há limite de área redesenhada para detectar a regressão. Logs: `keyboard-integration.log`, `keyboard-core-tests.log`, `keyboard-build.log`; relatório de digitação: `.emulator-build/artifacts/keyboard-typing.json`. O emulador usa ASan/UBSan. O HID também foi corrigido para abrir a interface antes de solicitar o descritor, conforme a máquina de estados do driver instalado; teclado USB real segue pendente.
+
+`player status` inclui `touch_reads`, `touch_read_us_max`, `touch_poll_gap_ms_max` e `ui_render_us_max`. `player perf-reset` zera os novos máximos. Eles distinguem espera/leitura do controlador touch, intervalo de polling e desenho/flush do display; `ui_refresh_us_max` sozinho não cobria essas etapas. Não registram conteúdo digitado.
+
+## Última rodada física de volume/interface
 
 Aplicação `ee9de827b94b16c578d8144622d63cc4e4351092d30dcb6f2bb50cc8c80cbcf2`, 3,026,096 bytes. Build/size, 2/2 CTest, 9 testes Python e 448 verificações do emulador passaram. O display de software apresentou aproximadamente 20 fps; isso não mede o painel MIPI. A interface estática não produziu flushes adicionais, inclusive com título longo e reticências. Evidências `ui-audio-*.log` e `ui-audio-validation.json`.
 

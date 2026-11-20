@@ -71,3 +71,7 @@ CONFIG_FATFS_API_ENCODING_UTF_8=y
 # External stacks for controller, FFT, diagnostics and asynchronous IMU init.
 CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM=y
 CONFIG_FATFS_VOLUME_COUNT=2
+
+# Physical keyboards/receivers may share the host port through a USB hub.
+CONFIG_USB_HOST_HUBS_SUPPORTED=y
+CONFIG_USB_HOST_HUB_MULTI_LEVEL=y

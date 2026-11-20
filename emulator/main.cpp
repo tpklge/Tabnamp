@@ -17,6 +17,7 @@
 #include <cstdlib>
 using namespace tabnamp;
 static uint32_t clock_ms=0;static uint64_t presented=0,flushed_pixels=0;
+static lv_point_t pointer_point{};static bool pointer_pressed=false;
 static std::vector<uint32_t> pixels(1280*1280);static SDL_Window* window=nullptr;static SDL_Renderer* renderer=nullptr;static SDL_Texture* texture=nullptr;static int width=1280,height=720;
 static void flush(lv_display_t* d,const lv_area_t* area,uint8_t* map){
     const auto* src=reinterpret_cast<const uint32_t*>(map);int stride=area->x2-area->x1+1;
@@ -41,11 +42,74 @@ int main(int argc,char** argv){
     Engine engine(root);engine.fetch_playlist=fetch;engine.initialize();Ui ui(engine,display);
     auto resize=[&](bool landscape){width=landscape?1280:720;height=landscape?720:1280;lv_display_set_resolution(display,width,height);if(window){SDL_SetWindowSize(window,width/2,height/2);if(texture)SDL_DestroyTexture(texture);texture=SDL_CreateTexture(renderer,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,width,height);}};
     ui.rotate=resize;int brightness=70;ui.backlight=[&](int value){brightness=value;};ui.build();resize(ui.landscape());
+    auto* mouse=lv_indev_create();lv_indev_set_type(mouse,LV_INDEV_TYPE_POINTER);
+    lv_indev_set_read_cb(mouse,[](lv_indev_t*,lv_indev_data_t* data){data->point=pointer_point;data->state=pointer_pressed?LV_INDEV_STATE_PRESSED:LV_INDEV_STATE_RELEASED;});
     OutputGain simulated_gain;
     auto pump=[&](int rounds=1,bool output=true){for(int i=0;i<rounds;i++){clock_ms+=20;engine.tick(clock_ms);PcmBlock block;if(output&&engine.consume(block)){std::array<float,1024> mixed;simulated_gain.process(block.samples.data(),mixed.data(),block.frames,engine.snapshot().settings);engine.acknowledge(block,true);}engine.analyse();engine.tick(clock_ms);ui.refresh(clock_ms);lv_timer_handler();}};
     if(test){
         auto began=std::chrono::steady_clock::now();int assertions=0;
         auto expect=[&](bool value,const char* text){check(value,text);++assertions;};
+        auto press_key=[&](int key,bool ctrl=false,bool shift=false){ui.key(key,ctrl,shift,true,200,clock_ms);ui.key(key,ctrl,shift,false,200,clock_ms);};
+        auto tap=[&](lv_point_t point){pointer_point=point;pointer_pressed=ui.input(0,true,clock_ms);lv_indev_read(mouse);pump();pointer_pressed=false;ui.input(0,false,clock_ms);lv_indev_read(mouse);pump();};
+        auto child_of_type=[](lv_obj_t* parent,const lv_obj_class_t* type){lv_obj_t* found=nullptr;for(uint32_t i=0;i<lv_obj_get_child_count(parent);i++){auto* child=lv_obj_get_child(parent,i);if(lv_obj_check_type(child,type)){found=child;break;}}return found;};
+        auto touch_key=[&](lv_obj_t* keyboard,const char* text){for(uint32_t i=0;;i++){auto* label=lv_keyboard_get_button_text(keyboard,i);check(label,"virtual key exists");if(std::string(label)==text){lv_buttonmatrix_set_selected_button(keyboard,i);lv_obj_send_event(keyboard,LV_EVENT_VALUE_CHANGED,nullptr);return;}}};
+        // Exercise actual pointer press/release and render each typed key.
+        engine.post({Action::KeyboardLayout,1});pump();
+        lv_obj_send_event(ui.control("search"),LV_EVENT_CLICKED,nullptr);pump();
+        auto* typing_dialog=lv_obj_get_child(lv_screen_active(),-1);
+        auto* typing_field=child_of_type(typing_dialog,&lv_textarea_class);
+        auto* typing_keyboard=child_of_type(typing_dialog,&lv_keyboard_class);
+        expect(typing_field&&typing_keyboard,"typing dialog exposes text field and touch keyboard");
+        lv_refr_now(display);lv_area_t keyboard_area;lv_obj_get_content_coords(typing_keyboard,&keyboard_area);
+        auto first_key=lv_point_t{keyboard_area.x1+lv_area_get_width(&keyboard_area)/20,keyboard_area.y1+lv_area_get_height(&keyboard_area)/12};
+        auto typing_began=std::chrono::steady_clock::now();auto typing_pixels=flushed_pixels;
+        for(int i=0;i<12;i++){
+            tap(first_key);
+            expect(std::string(lv_textarea_get_text(typing_field))==std::string(i+1,'1'),"touch tap inserts exactly one key immediately");
+        }
+        auto typing_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-typing_began).count();
+        typing_pixels=flushed_pixels-typing_pixels;
+        std::cout<<"Touch typing: "<<typing_seconds<<" s / 12 keys; pixels="<<typing_pixels<<"\n";
+        expect(typing_pixels<uint64_t(width)*height*2,"typing redraws only keys and entry, not the whole keyboard on every press");
+        {std::ofstream report(artifacts/"keyboard-typing.json");report<<"{\"keys\":12,\"software_seconds\":"<<typing_seconds<<",\"flushed_pixels\":"<<typing_pixels<<",\"hardware_validated\":false}\n";}
+        lv_textarea_set_text(typing_field,"abç");press_key(LV_KEY_LEFT);press_key(127);
+        expect(std::string(lv_textarea_get_text(typing_field))=="ab","Delete removes the UTF8 character after the cursor");
+        press_key(8);press_key('x');expect(std::string(lv_textarea_get_text(typing_field))=="ax","cursor and Backspace edit the active field");
+        auto typing_state=engine.snapshot();press_key('m');press_key('s');press_key(' ');pump();
+        expect(engine.snapshot().settings.mute==typing_state.settings.mute&&engine.snapshot().settings.shuffle==typing_state.settings.shuffle,"text typing does not trigger playback shortcuts");
+        // Submit through the on-screen OK key, including deletion during dispatch.
+        touch_key(typing_keyboard,LV_SYMBOL_OK);pump();
+        expect(!ui.dialog_open(),"on-screen OK confirms and closes the text dialog");
+        lv_obj_send_event(ui.control("search"),LV_EVENT_CLICKED,nullptr);pump();press_key('a');press_key('\r');pump();
+        expect(!ui.dialog_open(),"physical Enter submits the active text dialog");
+        // Touch focus must select the password field and keep input out of SSID.
+        std::string connected_ssid,connected_password;
+        ui.credentials("Teste local",[&](std::string ssid,std::string password){connected_ssid=ssid;connected_password=password;},[]{});pump();lv_refr_now(display);
+        auto* credentials=lv_obj_get_child(lv_screen_active(),-1);
+        auto* ssid=child_of_type(credentials,&lv_textarea_class);lv_obj_t* password=nullptr;
+        for(uint32_t i=0;i<lv_obj_get_child_count(credentials);i++){auto* child=lv_obj_get_child(credentials,i);if(lv_obj_check_type(child,&lv_textarea_class)&&child!=ssid)password=child;}
+        expect(password!=nullptr,"Wi-Fi dialog has separate SSID and password fields");
+        press_key('s');press_key('\t');press_key('p');
+        expect(std::string(lv_textarea_get_text(ssid))=="s"&&std::string(lv_textarea_get_text(password))=="p","Tab moves typing from SSID to password");
+        auto* credential_keyboard=child_of_type(credentials,&lv_keyboard_class);
+        lv_obj_get_content_coords(credential_keyboard,&keyboard_area);
+        lv_area_t password_area;lv_obj_get_coords(password,&password_area);
+        expect(keyboard_area.y1>password_area.y2,"touch keyboard stays below Wi-Fi fields");
+        tap({keyboard_area.x1+lv_area_get_width(&keyboard_area)/20,keyboard_area.y1+lv_area_get_height(&keyboard_area)/12});
+        expect(std::string(lv_textarea_get_text(password))=="p1"&&std::string(lv_textarea_get_text(ssid))=="s","touch keyboard writes only to focused password field");
+        touch_key(credential_keyboard,"1#");touch_key(credential_keyboard,"@");touch_key(credential_keyboard,"abc");touch_key(credential_keyboard,"ç");
+        expect(std::string(lv_textarea_get_text(password))=="p1@ç","Portuguese touch keyboard supports password symbols and accents");
+        lv_area_t ssid_area;lv_obj_get_coords(ssid,&ssid_area);tap({ssid_area.x1+20,ssid_area.y1+20});press_key('x');
+        expect(std::string(lv_textarea_get_text(ssid)).find('x')!=std::string::npos&&std::string(lv_textarea_get_text(password))=="p1@ç","touch focus returns typing to SSID without changing password");
+        touch_key(credential_keyboard,LV_SYMBOL_OK);pump();
+        expect(!ui.dialog_open()&&connected_ssid.find('x')!=std::string::npos&&connected_password=="p1@ç","Wi-Fi keyboard OK submits the values from both fields");
+        ui.orientation(false);pump();lv_obj_send_event(ui.control("search"),LV_EVENT_CLICKED,nullptr);pump();lv_refr_now(display);
+        typing_dialog=lv_obj_get_child(lv_screen_active(),-1);typing_field=child_of_type(typing_dialog,&lv_textarea_class);typing_keyboard=child_of_type(typing_dialog,&lv_keyboard_class);
+        lv_obj_get_content_coords(typing_keyboard,&keyboard_area);
+        for(int i=0;i<8;i++)tap({keyboard_area.x1+lv_area_get_width(&keyboard_area)/20,keyboard_area.y1+lv_area_get_height(&keyboard_area)/12});
+        expect(std::string(lv_textarea_get_text(typing_field))=="11111111","portrait touch keyboard accepts successive taps");
+        press_key(27);ui.orientation(true);pump();
+        engine.post({Action::KeyboardLayout,0});pump();
         pump(200,false);expect(engine.snapshot().count>=7,"fixtures scanned incrementally");
         engine.post({Action::Clear});pump();engine.post({Action::Add,0,0,root+"/music/tone.wav"});pump();
         lv_obj_send_event(ui.control("play"),LV_EVENT_CLICKED,nullptr);pump(40);expect(engine.snapshot().position_ms>0,"LVGL play produces consumed PCM");
@@ -185,8 +249,6 @@ int main(int argc,char** argv){
         std::cout<<assertions<<" emulator checks passed; software fps="<<fps<<"\n";
     }else{
         window=SDL_CreateWindow("Tabnamp - LVGL simulator",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,width/2,height/2,SDL_WINDOW_RESIZABLE);renderer=SDL_CreateRenderer(window,-1,SDL_RENDERER_SOFTWARE);resize(ui.landscape());
-        auto* mouse=lv_indev_create();lv_indev_set_type(mouse,LV_INDEV_TYPE_POINTER);static lv_point_t point{};static bool pressed=false;
-        lv_indev_set_read_cb(mouse,[](lv_indev_t*,lv_indev_data_t* data){data->point=point;data->state=pressed?LV_INDEV_STATE_PRESSED:LV_INDEV_STATE_RELEASED;});
         bool run=true;std::atomic<bool> running{true};
         std::thread worker([&]{while(running){engine.tick(SDL_GetTicks());engine.analyse();std::this_thread::sleep_for(std::chrono::milliseconds(1));}});
         std::thread output([&]{SDL_AudioDeviceID device=0;uint32_t rate=0,generation=0;OutputGain gain;PcmBlock block;while(running){if(!engine.consume(block)){std::this_thread::sleep_for(std::chrono::milliseconds(2));continue;}if(block.generation!=engine.generation())continue;
@@ -197,8 +259,8 @@ int main(int argc,char** argv){
         SDL_StartTextInput();uint32_t last=0;
         while(run){clock_ms=SDL_GetTicks();SDL_Event event;while(SDL_PollEvent(&event)){
             if(event.type==SDL_QUIT)run=false;
-            if(event.type==SDL_MOUSEMOTION){int ww,hh;SDL_GetWindowSize(window,&ww,&hh);point.x=event.motion.x*width/ww;point.y=event.motion.y*height/hh;}
-            if(event.type==SDL_MOUSEBUTTONDOWN||event.type==SDL_MOUSEBUTTONUP){bool down=event.type==SDL_MOUSEBUTTONDOWN;pressed=ui.input(0,down,clock_ms)&&down;}
+            if(event.type==SDL_MOUSEMOTION){int ww,hh;SDL_GetWindowSize(window,&ww,&hh);pointer_point.x=event.motion.x*width/ww;pointer_point.y=event.motion.y*height/hh;}
+            if(event.type==SDL_MOUSEBUTTONDOWN||event.type==SDL_MOUSEBUTTONUP){bool down=event.type==SDL_MOUSEBUTTONDOWN;pointer_pressed=ui.input(0,down,clock_ms)&&down;}
             if(event.type==SDL_KEYDOWN||event.type==SDL_KEYUP){auto sym=event.key.keysym.sym;int key=sym;if(sym==SDLK_LEFT)key=LV_KEY_LEFT;if(sym==SDLK_RIGHT)key=LV_KEY_RIGHT;if(sym==SDLK_UP)key=LV_KEY_UP;if(sym==SDLK_DOWN)key=LV_KEY_DOWN;ui.key(key,event.key.keysym.mod&KMOD_CTRL,event.key.keysym.mod&KMOD_SHIFT,event.type==SDL_KEYDOWN,uint8_t(event.key.keysym.scancode+1),clock_ms);}
             if(event.type==SDL_TEXTINPUT&&ui.dialog_open()){auto* focused=lv_indev_get_active_obj();(void)focused;/* on-screen keyboard always available */}
         }if(clock_ms-last>=16){ui.refresh(clock_ms);last=clock_ms;}lv_timer_handler();SDL_Delay(2);}

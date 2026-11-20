@@ -1,60 +1,75 @@
 {
-  "scope": "Regressao de audio e interface; nao e a suite fisica completa de resistencia e perifericos",
+  "release": "v0.1.1",
+  "scope": "Teclado fisico A164 por I2C e entrada de texto; suite fisica completa de audio/resistencia nao repetida nesta imagem",
   "status": "passed",
-  "firmware_sha256": "ee9de827b94b16c578d8144622d63cc4e4351092d30dcb6f2bb50cc8c80cbcf2",
-  "bytes": 3026096,
+  "firmware_sha256": "0540c38555b2820ab9cbd2946a1145c36c1ac88d79044617100ee6c8a981d5bf",
+  "bytes": 3052208,
   "application_only": true,
   "partition_table_required": false,
   "installation": {
     "status": "passed",
     "method": "application-only serial write in verified existing slot",
-    "application_readback_sha256": "ee9de827b94b16c578d8144622d63cc4e4351092d30dcb6f2bb50cc8c80cbcf2",
+    "application_readback_sha256": "0540c38555b2820ab9cbd2946a1145c36c1ac88d79044617100ee6c8a981d5bf",
     "launcher_unchanged": true,
     "meshtastic_unchanged": true,
-    "partition_table_changed": false
+    "partition_table_changed": false,
+    "bootloader_unchanged": true,
+    "slot_tail_unchanged": true
   },
   "host": {
-    "core_tests": "passed",
-    "tool_tests": "passed",
+    "core_ctest": {
+      "status": "passed",
+      "tests": 3,
+      "sanitizers": [
+        "ASan",
+        "UBSan"
+      ]
+    },
     "emulator": {
       "backend": "LVGL 9.3 + SDL software display + FFmpeg host decoder",
-      "assertions": 448,
+      "assertions": 475,
       "status": "passed",
-      "elapsed_seconds": 5.06609,
-      "software_presented_fps": 19.752,
+      "elapsed_seconds": 5.39657,
+      "software_presented_fps": 19.8972,
       "hardware_validated": false
     },
     "soak": {
-      "audio_seconds": 60,
-      "radio_audio_seconds": 60,
+      "audio_seconds": 10,
+      "radio_audio_seconds": 10,
       "ring_underruns": 0,
-      "gapless_transitions": 7,
+      "gapless_transitions": 1,
       "accelerated": true,
       "hardware_validated": false
+    },
+    "typing_redraw": {
+      "baseline_pixels_12_keys": 4682766,
+      "current_pixels_12_keys": 833204,
+      "reduction_percent": 82.2,
+      "hardware_latency_measured": false
+    },
+    "tool_tests": {
+      "status": "passed",
+      "tests": 9
     }
   },
   "hardware": {
-    "status": "passed",
-    "speaker_codec_route": "passed",
-    "headphone_codec_route": "passed",
-    "dac_left_register": 0,
-    "dac_right_register": 0,
-    "large_mp3_play_and_pause": "passed",
-    "output_write_errors": 0,
-    "ring_underruns": 0,
-    "ui_window": {
-      "seconds": 30.027,
-      "callbacks_per_second": 49.72191694141939,
-      "flush_submissions_per_second": 17.384354081326805,
-      "refresh_us_max": 4290,
-      "callback_gap_ms_max": 42
+    "keyboard": {
+      "model": "M5Stack Tab5 Keyboard A164",
+      "transport": "I2C",
+      "address": "0x6D",
+      "firmware_version": 1,
+      "mode": "HID",
+      "detected": true,
+      "events_observed": 13,
+      "presses_observed": 7,
+      "ui_events_observed": 14,
+      "i2c_errors": 0,
+      "user_confirmed_working": true
     },
-    "panel_fps_measured": false,
     "quantitative_touch_latency_measured": false,
-    "adequate_volume_confirmed_by_user": true,
-    "improved_touch_response_confirmed_by_user": true
+    "usb_hid_physical_tested": false
   },
   "full_endurance_repeated_for_this_binary": false,
-  "usb_physical_retest_this_round": false,
+  "audio_codec_routes_retested_for_this_binary": false,
   "limitations": "docs/STATUS.md"
 }

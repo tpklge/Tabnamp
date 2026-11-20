@@ -2,6 +2,7 @@
 #include "ui.hpp"
 #include "network.hpp"
 #include "keyboard.hpp"
+#include "a164.hpp"
 #include "tab5_orientation.hpp"
 #include "output.hpp"
 #include "usb_storage.hpp"
@@ -34,7 +35,14 @@ __attribute__((constructor)) static void startup_heap_diagnostics(){
 }
 static TaskHandle_t decoder_handle=nullptr,output_handle=nullptr;
 static Engine* engine;static Ui* ui;static lv_indev_read_cb_t read_touch;
-static void touch(lv_indev_t* dev,lv_indev_data_t* data){read_touch(dev,data);if(!ui->input(0,data->state==LV_INDEV_STATE_PRESSED,esp_timer_get_time()/1000))data->state=LV_INDEV_STATE_RELEASED;}
+static void touch(lv_indev_t* dev,lv_indev_data_t* data){
+    auto began=esp_timer_get_time();auto now=uint64_t(began/1000);static uint64_t last=0;
+    if(last)touch_poll_gap_ms_max=std::max(touch_poll_gap_ms_max.load(),uint32_t(now-last));
+    last=now;
+    read_touch(dev,data);
+    touch_read_us_max=std::max(touch_read_us_max.load(),uint32_t(esp_timer_get_time()-began));++touch_reads;
+    if(!ui->input(0,data->state==LV_INDEV_STATE_PRESSED,now))data->state=LV_INDEV_STATE_RELEASED;
+}
 static void read_dac_levels(){
     output_dac_left=-1;output_dac_right=-1;
     // This version of the ES8388 codec driver has no get_reg callback. Read
@@ -104,9 +112,19 @@ static void application_task(void*){
     ESP_LOGI("tabnamp","Construindo UI; init stack livre=%u bytes",unsigned(uxTaskGetStackHighWaterMark(nullptr)));
     auto s=engine->snapshot();bsp_display_rotate(display,s.settings.landscape?LV_DISPLAY_ROTATION_90:LV_DISPLAY_ROTATION_0);ui->build();
     if(!mounted)ui->message("SD indisponivel: insira o cartao e use Tela > Tentar montar SD. Nenhum dado sera salvo na flash.");
-    for(auto* dev=lv_indev_get_next(nullptr);dev;dev=lv_indev_get_next(dev))if(lv_indev_get_type(dev)==LV_INDEV_TYPE_POINTER){read_touch=lv_indev_get_read_cb(dev);lv_indev_set_read_cb(dev,touch);lv_timer_set_period(lv_indev_get_read_timer(dev),10);break;}
+    for(auto* dev=lv_indev_get_next(nullptr);dev;dev=lv_indev_get_next(dev))if(lv_indev_get_type(dev)==LV_INDEV_TYPE_POINTER){
+        read_touch=lv_indev_get_read_cb(dev);lv_indev_set_read_cb(dev,touch);
+        // The BSP selects event mode when an IRQ pin exists. Merely changing
+        // its paused timer's period does not establish a 10 ms polling cadence.
+        lv_indev_set_mode(dev,LV_INDEV_MODE_TIMER);
+        lv_timer_set_period(lv_indev_get_read_timer(dev),10);break;
+    }
     lv_timer_set_period(lv_display_get_refr_timer(display),16);
     lv_display_add_event_cb(display,[](lv_event_t* e){auto* d=static_cast<lv_display_t*>(lv_event_get_target(e));if(lv_display_flush_is_last(d))++ui_flushes;},LV_EVENT_FLUSH_START,nullptr);
+    lv_display_add_event_cb(display,[](lv_event_t* e){static int64_t began=0;
+        if(lv_event_get_code(e)==LV_EVENT_REFR_START)began=esp_timer_get_time();
+        else if(lv_event_get_code(e)==LV_EVENT_REFR_READY&&began)ui_render_us_max=std::max(ui_render_us_max.load(),uint32_t(esp_timer_get_time()-began));
+    },LV_EVENT_ALL,nullptr);
     lv_timer_create([](lv_timer_t*){
         auto began=esp_timer_get_time();auto now=uint64_t(began/1000);static uint64_t last=0;
         if(last)ui_poll_gap_ms_max=std::max(ui_poll_gap_ms_max.load(),uint32_t(now-last));
@@ -131,7 +149,7 @@ static void application_task(void*){
     xTaskCreate([](void*){console_start(*engine);vTaskDelete(nullptr);},"console_init",8192,nullptr,1,nullptr);
     usb_storage_start(*engine);
     // Optional HID/IMU startup must not delay audio, diagnostics or the console.
-    xTaskCreate([](void*){keyboard_start();vTaskDelete(nullptr);},"hid_init",8192,nullptr,1,nullptr);
+    xTaskCreate([](void*){keyboard_start();a164_start();vTaskDelete(nullptr);},"keyboard_init",8192,nullptr,1,nullptr);
     network_restore();
     xTaskCreateWithCaps([](void*){
         uint64_t last_retry=0,last_metrics=0;unsigned storage_failures=0;

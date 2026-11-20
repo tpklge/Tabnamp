@@ -4,7 +4,25 @@ O Tabnamp foi instalado como aplicação pelo Launcher do Paludo e executado no 
 
 O resumo distribuído no GitHub é [`artifacts/validation.json`](../artifacts/validation.json). Os nomes de relatórios detalhados citados abaixo identificam registros do workspace de desenvolvimento; backups da flash, logs brutos e arquivos pessoais não fazem parte da publicação.
 
-## Rodada atual — volume e interface
+## Teclado físico A164 — corrigido e confirmado
+
+O teclado da base é o **Tab5 Keyboard A164 por I²C**, não um periférico USB. Faltava seu driver no Tabnamp. A revisão instalada em `app1` adiciona leitura dedicada no controlador I²C 0, GPIO0/1, endereço `0x6D`, modo HID, reconexão e entrega ao caminho existente de edição/atalhos/repetição. Enter também confirma o diálogo de texto ativo. Fonte: [documentação oficial do A164](https://docs.m5stack.com/en/tab5/Tab5_Keyboard).
+
+Imagem: **3.052.208 bytes**, SHA-256 `0540c38555b2820ab9cbd2946a1145c36c1ac88d79044617100ee6c8a981d5bf`, disponível em `artifacts/tabnamp-ota.bin`. Build, 3/3 CTest com ASan/UBSan e 475 checks LVGL/SDL passaram. A leitura de flash confirmou a aplicação e preservação de bootloader, tabela, launcher, Meshtastic e cauda do slot.
+
+A serial confirmou A164 presente, firmware 1, modo HID: **13 eventos recebidos, 7 pressões, 14 eventos entregues à UI e zero erros I²C** na janela capturada. O usuário confirmou: **“agora funciona”**. Evidências: `a164-boot.log`, `a164-key-monitor.json`, `a164-install/validation.json`, `a164-core-tests.log` e `a164-integration.log`. A confirmação física do teclado não constitui medição da latência do touch.
+
+## Revisão adicional — teclado USB
+
+Revisão HID instalada em `app1`: **3.050.032 bytes**, SHA-256 `ef3b5fd9511f5212e4b952a437bde4038dc798996827758a554819551f97d6fb`. O driver agora configura/fecha interfaces em uma tarefa separada do processamento USB, corrige a propriedade do contexto nas falhas/desconexões e inclui suporte a hubs. Build e 3/3 CTest com ASan/UBSan passaram. O teste que repõe configuração dentro do callback reproduz o bloqueio. Relatórios: `hid-deadlock-regression.json`, `hid-core-tests.log`, `hid-build.log`.
+
+A instalação foi precedida por backup integral e seguida por leitura de verificação: somente a aplicação mudou; bootloader, tabela, launcher, Meshtastic e a cauda do slot foram preservados (`hid-install-validation.json`). A serial confirmou o driver instalado, sem erros, mas zero conexões/interfaces USB HID. `player usb` identificou somente `0781:5567`, interface classe 8/subclasse 6/protocolo 80 (armazenamento), já montada como FAT. Essa ausência é esperada para o teclado A164, que usa I²C; a correção dele é descrita acima. Evidências da revisão USB em `hid-fixed-boot.log` e `hid-runtime-initial.json`.
+
+## Revisão anterior — digitação touch
+
+Correções de polling do touch, redesenho por tecla, foco/edição dos campos, símbolos no teclado português, botão OK e abertura do HID estão no código e em `artifacts/tabnamp-keyboard-fix.bin`. Build ESP32-P4, 2/2 CTest do núcleo e 474 checks LVGL/SDL com ASan/UBSan passaram. O teste de 12 toques reduziu os pixels redesenhados em 82,2%; o atraso relatado de 20 s por tecla não foi reproduzido no computador. A investigação HID encontrou esta imagem instalada em `app1` e a substituiu pela revisão acima. A latência física do touch segue sem medição. Os pacotes publicados e seus relatórios permanecem identificados pela rodada anterior. Detalhes e novas métricas em `PERFORMANCE.md`.
+
+## Última rodada física — volume e interface
 
 Imagem de aplicação: **3,026,096 bytes**, SHA-256 `ee9de827b94b16c578d8144622d63cc4e4351092d30dcb6f2bb50cc8c80cbcf2`. `ui-audio-validation.json` reúne esta rodada; os testes físicos específicos ficam em `hardware-ui-audio-report.json`.
 
@@ -19,7 +37,7 @@ Atualização concluída somente no slot existente do Tabnamp pela USB serial, c
 
 ## Entrega e OTA
 
-`artifacts/tabnamp-ota.bin` é somente a imagem de aplicação ESP32-P4, idêntica a `build/tabnamp.bin`, com checksum e SHA-256 anexado verificados. Não exige tabela específica, bootloader, offset fixo ou partições de dados próprias. O launcher escolhe um slot com espaço suficiente. Configuração, fontes, playlists e cache ficam em `/sdcard/tabnamp`; o Wi-Fi não utiliza NVS do aplicativo. Não foi atualizado o C6.
+`artifacts/tabnamp-ota.bin` é a imagem de aplicação ESP32-P4 da v0.1.1, idêntica à revisão A164 confirmada no aparelho, com checksum e SHA-256 anexado verificados. Novos builds de desenvolvimento podem diferir dela. Não exige tabela específica, bootloader, offset fixo ou partições de dados próprias. O launcher escolhe um slot com espaço suficiente. Configuração, fontes, playlists e cache ficam em `/sdcard/tabnamp`; o Wi-Fi não utiliza NVS do aplicativo. Não foi atualizado o C6.
 
 O backup integral anterior à instalação está no microSD do aparelho; seu registro é `hardware-preinstall-backup.json`. A alocação inicial foi feita pelo mecanismo do próprio launcher. As atualizações no slot reservado instalaram somente o aplicativo, sem mudar a tabela, como registrado em `hardware-install-final.json`. O Meshtastic existente foi preservado.
 

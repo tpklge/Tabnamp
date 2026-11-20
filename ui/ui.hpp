@@ -9,6 +9,7 @@ namespace tabnamp {
 class Ui {
     Engine& engine_;lv_display_t* display_;lv_obj_t* root_;lv_obj_t *player_,*eq_,*list_,*time_,*title_,*status_,*volume_,*seek_,*rows_[9],*eqs_[10],*eq_names_[10],*bars_[24],*peaks_[24],*info_;
     lv_obj_t *overlay_=nullptr,*entry_=nullptr,*keyboard_=nullptr;Action pending_=Action::Add;
+    lv_obj_t* entry_submit_=nullptr;
     bool landscape_=true,was_on_=true,browser_mode_=false;
     size_t directory_first_=0;lv_obj_t* directory_rows_[9]{};lv_obj_t* directory_title_=nullptr;size_t first_=0;int selected_=0;uint64_t now_=0,next_spectrum_=0;
     lv_font_t* font_=nullptr;lv_font_t* digital_=nullptr;
@@ -23,6 +24,7 @@ class Ui {
     lv_obj_t* button(lv_obj_t* parent,const char* title,int x,int y,int width,std::function<void()> callback);
     void prompt(const char* title,Action action,const std::string& value);void close_dialog();void confirm(const char* message,std::function<void()> callback);
     void layout();void details();void browser();void menu();void preferences();void configure_keyboard();void select_row(int row);void drag(lv_event_t* event,int row);void post(Command command);
+    void configure_entry(lv_obj_t* field);void submit_entry();
 public:
     Screen screen;
     std::function<void(bool)> rotate;
